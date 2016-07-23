@@ -1,0 +1,272 @@
+#!/usr/bin/env python
+
+from libschema import Schematic, rotate_by_chars
+from libboard import BrdLoader, Board
+import sys
+
+CNT = 7
+
+def gen_schematic():
+    sch = Schematic()
+
+    pwr = sch.add_component('CONN_01X02')
+    sch.get_by_inst(pwr).x = -5000
+    sch.get_by_inst(pwr).y = 0
+    VCC = sch.add_component('VCC')
+    sch.connect_pin_to_pin(VCC, pwr, '1', '1')
+    gnd = sch.add_component('GND')
+    sch.connect_pin_to_pin(gnd, pwr, '1', '2')
+
+    gnd = sch.add_component('GND')
+    flg = sch.add_component('PWR_FLAG')
+    sch.get_by_inst(flg).x = -5000
+    sch.get_by_inst(flg).y = 1000
+    sch.connect_pin_to_pin(gnd, flg, '1', '1')
+
+    vcc = sch.add_component('VCC')
+    flg = sch.add_component('PWR_FLAG')
+    sch.get_by_inst(flg).x = -4500
+    sch.get_by_inst(flg).y = 1000
+    sch.connect_pin_to_pin(vcc, flg, '1', '1')
+    
+
+    uart = sch.add_component('CONN_01X03')
+    sch.get_by_inst(uart).x = -5000
+    sch.get_by_inst(uart).y = 2000
+    gnd = sch.add_component('GND')
+    sch.connect_pin_to_pin(gnd, uart, '1', '3')
+    sch.connect_netlabel('S00R', uart, '1')
+    sch.connect_netlabel('S00T', uart, '2')
+
+    for x in range(CNT):
+        for y in range(CNT):
+            ci = sch.add_component('STM32F050C4') #'STM32F100VB') #'STM32F417VE') #'STM32F050C4')
+            i = sch.get_by_inst(ci)
+            c_off = i.element.get_size()
+            i.x = int(x*(c_off[0]+4000))
+            i.y = int(y*(c_off[1]+4000))
+            gnd = sch.add_component('GND')
+            sch.connect_pin_to_pin(gnd, ci, '1', '47')
+            gnd = sch.add_component('GND')
+            sch.connect_pin_to_pin(gnd, ci, '1', '23')
+            gnd = sch.add_component('GND')
+            sch.connect_pin_to_pin(gnd, ci, '1', '8')
+
+            VCC = sch.add_component('VCC')
+            sch.connect_pin_to_pin(VCC, ci, '1', '48')
+            VCC = sch.add_component('VCC')
+            sch.connect_pin_to_pin(VCC, ci, '1', '24')
+            VCC = sch.add_component('VCC')
+            sch.connect_pin_to_pin(VCC, ci, '1', '9')
+
+            sch.connect_R_to_GND(ci, '7')
+#            for i in range(40, 46):
+#                sch.connect_R_to_GND(ci, str(i))
+#            for i in range(13, 20):
+#                sch.connect_part_to_GND('LED', ci, str(i))
+    m = [[0] * CNT + [1] for x in range(CNT)] + [[1]*(CNT+1)]
+    print m
+    V = {0: (1, 0), 1: (0, 1), 2: (-1, 0), 3: (0, -1)}
+    p = [0,0]
+    v = 0
+    L = {'U': 0, 'R': 1, 'D': 2, 'L': 3}
+    #L = {'U': 3, 'R': 2, 'D': 1, 'L': 0}
+    for i in range(CNT**2):
+        idx = p[0] + p[1]*CNT
+        sch.connect_netlabel('S{}{}R'.format(p[0], p[1]), 'U{}'.format(idx+1), '12')
+        sch.connect_netlabel('S{}{}T'.format(p[0], p[1]), 'U{}'.format(idx+1), '13')
+        m[p[0]][p[1]] = 1
+        pp = [p[0]+V[v][0], p[1]+V[v][1]]
+        if m[pp[0]][pp[1]] == 1:
+            v += 1
+            v %= 4
+            pp = [p[0]+V[v][0], p[1]+V[v][1]]
+        p = pp
+        sch.connect_netlabel('S{}{}R'.format(p[0], p[1]), 'U{}'.format(idx+1), '37')
+        sch.connect_netlabel('S{}{}T'.format(p[0], p[1]), 'U{}'.format(idx+1), '38')
+
+
+    for y in range(CNT):
+        for x in range(CNT):
+
+            n = sch.connect_netlabel('NWA{}{}'.format(x,y), 'U{}'.format(1+x+y*CNT), '5')
+            sch.begin_group('GL{}-{}'.format(x,y))
+            led = sch.add_component('LED')
+            l = sch.get_by_inst(led)
+            l.r = rotate_by_chars('L', sch.get_by_inst(n).r)
+            l.x = sch.get_by_inst(n).x + int(0.4*V[L[l.r]][0]*2000)
+            l.y = sch.get_by_inst(n).y + V[L[l.r]][1]*500 + 800
+            sch.connect_netlabel('NWA{}{}'.format(x,y), led, '2')
+            sch.connect_R_to_GND(led, '1')
+            sch.end_group()
+
+
+            n = sch.connect_netlabel('NWB{}{}'.format(x,y), 'U{}'.format(1+x+y*CNT), '6')
+            sch.begin_group('GL{}-{}'.format(x,y))
+            led = sch.add_component('LED')
+            l = sch.get_by_inst(led)
+            l.r = rotate_by_chars('L', sch.get_by_inst(n).r)
+            l.x = sch.get_by_inst(n).x + int(0.4*(V[L[l.r]][0])*2000)
+            l.y = sch.get_by_inst(n).y + (2*V[L[l.r]][1])*500 + 800
+            sch.connect_netlabel('NWB{}{}'.format(x,y), led, '2')
+            sch.connect_R_to_GND(led, '1')
+            sch.end_group()
+
+            n = sch.connect_netlabel('NEA{}{}'.format(x,y), 'U{}'.format(1+x+y*CNT), '35')
+            sch.begin_group('GL{}-{}'.format(x,y))
+            led = sch.add_component('LED')
+            l = sch.get_by_inst(led)
+            l.r = rotate_by_chars('L', sch.get_by_inst(n).r)
+            l.x = sch.get_by_inst(n).x + int(0.4*(V[L[l.r]][0])*2000)
+            l.y = sch.get_by_inst(n).y + (3*V[L[l.r]][1])*500 + 800
+            print 'L.r = ', l.r, ' rot', V[L[l.r]]
+            sch.connect_netlabel('NEA{}{}'.format(x,y), led, '2')
+            sch.connect_R_to_GND(led, '1')
+            sch.end_group()
+
+            n = sch.connect_netlabel('NEB{}{}'.format(x,y), 'U{}'.format(1+x+y*CNT), '36')
+            sch.begin_group('GL{}-{}'.format(x,y))
+            led = sch.add_component('LED')
+            l = sch.get_by_inst(led)
+            l.r = rotate_by_chars('L', sch.get_by_inst(n).r)
+            l.x = sch.get_by_inst(n).x + int(0.4*(V[L[l.r]][0])*2000)
+            l.y = sch.get_by_inst(n).y + (4*V[L[l.r]][1])*500 + 800
+            sch.connect_netlabel('NEB{}{}'.format(x,y), led, '2')
+            sch.connect_R_to_GND(led, '1')
+            sch.end_group()
+
+
+
+            n = sch.connect_netlabel('NSA{}{}'.format(x,y), 'U{}'.format(1+x+y*CNT), '18')
+            sch.begin_group('GL{}-{}'.format(x,y))
+            led = sch.add_component('LED')
+            l = sch.get_by_inst(led)
+            l.r = rotate_by_chars('L', sch.get_by_inst(n).r)
+            l.x = sch.get_by_inst(n).x + int(0.7*V[L[l.r]][0]*2000)
+            l.y = sch.get_by_inst(n).y + V[L[l.r]][1]*500 + 800
+            sch.connect_netlabel('NSA{}{}'.format(x,y), led, '2')
+            sch.connect_R_to_GND(led, '1')
+            sch.end_group()
+
+            n = sch.connect_netlabel('NSB{}{}'.format(x,y), 'U{}'.format(1+x+y*CNT), '19')
+            sch.begin_group('GL{}-{}'.format(x,y))
+            led = sch.add_component('LED')
+            l = sch.get_by_inst(led)
+            l.r = rotate_by_chars('L', sch.get_by_inst(n).r)
+            print 'L.r = ', l.r, ' rot', V[L[l.r]]
+            l.x = sch.get_by_inst(n).x + int(0.7*V[L[l.r]][0]*2000)
+            l.y = sch.get_by_inst(n).y + (2*V[L[l.r]][1]*500) + 800
+            sch.connect_netlabel('NSB{}{}'.format(x,y), led, '2')
+            sch.connect_R_to_GND(led, '1')
+            sch.end_group()
+
+            n = sch.connect_netlabel('NNA{}{}'.format(x,y), 'U{}'.format(1+x+y*CNT), '42')
+            sch.begin_group('GL{}-{}'.format(x,y))
+            led = sch.add_component('LED')
+            l = sch.get_by_inst(led)
+            l.r = rotate_by_chars('L', sch.get_by_inst(n).r)
+            l.x = sch.get_by_inst(n).x + int(0.7*V[L[l.r]][0]*2000)
+            l.y = sch.get_by_inst(n).y + (3*V[L[l.r]][1]*500) + 800
+            sch.connect_netlabel('NNA{}{}'.format(x,y), led, '2')
+            sch.connect_R_to_GND(led, '1')
+            sch.end_group()
+
+            n = sch.connect_netlabel('NNB{}{}'.format(x,y), 'U{}'.format(1+x+y*CNT), '43')
+            sch.begin_group('GL{}-{}'.format(x,y))
+            led = sch.add_component('LED')
+            l = sch.get_by_inst(led)
+            l.r = rotate_by_chars('L', sch.get_by_inst(n).r)
+            l.x = sch.get_by_inst(n).x + int(0.7*V[L[l.r]][0]*2000)
+            l.y = sch.get_by_inst(n).y + (4*V[L[l.r]][1]*500) + 800
+            sch.connect_netlabel('NNB{}{}'.format(x,y), led, '2')
+            sch.connect_R_to_GND(led, '1')
+            sch.end_group()
+
+
+
+
+            sch.connect_netlabel('NWA{}{}'.format(x,y), 'U{}'.format(1+((x-1)%CNT)+y*CNT),'30')#'11') #
+            sch.connect_netlabel('NWB{}{}'.format(x,y), 'U{}'.format(1+((x-2)%CNT)+y*CNT),'31')#'10') #
+            sch.connect_netlabel('NEA{}{}'.format(x,y), 'U{}'.format(1+((x+1)%CNT)+y*CNT),'10')#'30') #
+            sch.connect_netlabel('NEB{}{}'.format(x,y), 'U{}'.format(1+((x+2)%CNT)+y*CNT),'11')#'31') #
+
+            sch.connect_netlabel('NSA{}{}'.format(x,y), 'U{}'.format(1+x+((y+1)%CNT)*CNT), '40')#'21')#'40')
+            sch.connect_netlabel('NSB{}{}'.format(x,y), 'U{}'.format(1+x+((y+2)%CNT)*CNT), '41')#'22')#'41')
+            sch.connect_netlabel('NNA{}{}'.format(x,y), 'U{}'.format(1+x+((y-1)%CNT)*CNT), '21')#'40')#'21')
+            sch.connect_netlabel('NNB{}{}'.format(x,y), 'U{}'.format(1+x+((y-2)%CNT)*CNT), '22')#'41')#'22')
+
+#            r = sch.add_component('R_Small')
+#            gnd = sch.add_component('GND')
+#            sch.connect_pin_to_pin(r, ci, '2', '7')
+#            sch.connect_pin_to_pin(gnd, r, '1', '2')
+#
+#            r = sch.add_component('R_Small')
+#            gnd = sch.add_component('GND')
+#            sch.connect_pin_to_pin(r, ci, '2', '43')
+#            sch.connect_pin_to_pin(gnd, r, '1', '2')
+
+#            gnd = sch.add_component('GND')
+#            sch.connect_pin_to_pin(gnd, ci, '1', '12')
+#            sch.connect_netlabel('YOLO', ci, '25')
+#            sch.connect_netlabel('YOLO', ci, '26')
+    sch.save(sys.argv[1])
+    return sch
+
+def gen_board(sch):
+    lib = BrdLoader()
+    lib.import_dir('/home/mzatko/kicad_sources/library-repos/')
+    brd = Board(lib)
+    brd.schema = sch
+    brd.layer_count = 4
+
+    print lib.lookup('0402')
+    idx = 0
+
+    print 'LOLKY'
+    for cid in brd.schema.components:
+        c = brd.schema.components[cid]
+        if c.part.startswith('R_Small'):
+            c.element.footprint = 'R_0402'
+        elif c.part.startswith('LED'):
+            c.element.footprint = 'R_0402'
+
+    for y in range(CNT):
+        for x in range(CNT):
+            idx += 1
+            u = 'U{}'.format(idx)
+            brd.place_package(u, lib.lookup('LQFP-48')[0]) #, {'1': 'VCC', '2': 'GND'})
+            brd.packages[u].position = (30 + x * 15.0, 30 + y * 15.0)
+
+            parts = sch.get_group('GL{}-{}'.format(y,x))
+            #print parts
+
+            diodes = 0
+            resistors = 0
+            diodes = -len(filter(lambda j: j.startswith('D'), parts))/2
+            resistors = -len(filter(lambda j: j.startswith('R'), parts))/2
+            for p in parts:
+                #print len(p), 'parts.', p, 'footprint', brd.schema.get_by_inst(p).footprint()
+                fp = brd.schema.get_by_inst(p).footprint()
+                if fp != '"':
+                    brd.place_package(p, brd.schema.get_by_inst(p).footprint())
+                    brd.packages[p].layer = 'B.Cu'
+                    px = 0
+                    if p[0] == 'R':
+                        brd.packages[p].position = (30 + x * 15.0 - 2.5 + 6.5*(resistors%2), 30 + (resistors // 2)*1.8 + y * 15.0)
+                        resistors += 1
+                    if p[0] == 'D':
+                        brd.packages[p].position = (30 + x * 15.0 - 5.5 + 6.5*(diodes%2), 30 + (diodes // 2)*1.8 + y * 15.0)
+                        diodes += 1
+#    b.place_package('U2', lib.lookup('QFN-16')[0], {'1': 'VCC', '17': 'GND'})
+
+    import sexp
+    with open(sys.argv[1]+'.kicad_pcb', 'w+') as fout:
+        fout.write(sexp.save(brd.to_sexp()))
+
+def gen_cluster():
+    sch = gen_schematic()
+    gen_board(sch)
+
+
+if __name__ == "__main__":
+    gen_cluster()
