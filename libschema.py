@@ -95,7 +95,8 @@ class Netlabel(object):
         self.r = 'R'
         self.connected = []
         self.element = self
-        self.pins = {}
+        self.pins = {'1': []}
+        self.pins_i = {'1': []}
         self.groups = set()
 
     def footprint(self):
@@ -196,12 +197,15 @@ $EndDescr
         ca = self.get_by_inst(cwhat)
         cb = self.get_by_inst(cwhere)
         netname = ''
-        if len(ca.element.pins) == 1:
+        if len(ca.element.pins_i) == 1:
             netname = ca.element.name
+            print 'OTHER PIN NAMES OF {} :'.format(cwhat), ca.element.pins
         elif len(cb.element.pins) == 1:
             netname = cb.element.name
+            print 'OTHER PIN NAMES OF {} :'.format(cwhere), cb.element.pins
         else:
             netname = get_timestamp()
+        print 'RESULTING NETNAME IS', netname
         rpin = self.get_by_inst(cwhere).element.pin_by_id(pinwhere)[4]
         rpinw = self.get_by_inst(cwhat).element.pin_by_id(pinwhat)[4]
         print 'CONNECTING {} -> {}, {} -> {}'.format(cwhat, cwhere, rpin, rpinw)
